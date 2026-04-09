@@ -24,7 +24,7 @@ pygame.display.set_caption("Simulação de Cidade")
 # Carregar imagem da cidade
 background = pygame.image.load("cidade.png").convert_alpha()
 background = pygame.transform.smoothscale(background, (MAP_SIZE, MAP_SIZE))
-background.set_alpha(1000)
+background.set_alpha(4000)
 
 #  carregar imagem do fogo
 fire_img = pygame.image.load("fogo-aviso.png")
@@ -116,7 +116,7 @@ class AgenteSimples:
                     return
 
     #  PERCEPÇÃO LOCAL (MESMA CÉLULA)
-    def perceber(self, focos, feridos):
+    def perceber(self, focos, feridos):    #recebe a lista dos eventos que estão acontecendo
         eventos = []
         if (self.x, self.y) in focos:
             eventos.append(("fogo", (self.x, self.y)))  #verifica a posição em que o drono esta e ve se tem algum foco ou ferido ali e adiciona em evento 
@@ -157,10 +157,15 @@ class AgenteBDI:
 
     #  Comandante BDI despacha todas as intenções
     def despachar(self, bombeiros, socorristas, focos, feridos):
-        # BELIEFS: Limpar listas com base no que os drones param de ver
-        self.relatorio_incendios = [pos for pos in self.relatorio_incendios if pos in focos]
+        #crenças 
+        # BELIEFS: Limpar listas com base no que os drones param de ver -- mantendo apenas o que esta acontecendo ainda
+        self.relatorio_incendios = [pos for pos in self.relatorio_incendios if pos in focos] 
         self.lista_feridos = [pos for pos in self.lista_feridos if pos in feridos]
 
+        #depois dessa linha tudo fica atualizado para o BDI
+
+ 
+        #Desejos 
         # DESIRE: Apagar todos os incêndios (Intenção de Fogo)
         for pos in self.relatorio_incendios:
             # Verifica se já existe um bombeiro indo para este foco
@@ -180,7 +185,7 @@ class AgenteBDI:
             if not alocado:
                 b_livres = [b for b in bombeiros if b.alvo is None]
                 if b_livres:
-                    # Cálculo de Utilidade: menor distância de Manhattan
+                    # Cálculo de Utilidade: menor distância de Manhattan para pegar o bombeiro mais próximo
                     b_aux = min(b_livres, key=lambda b: abs(b.x - pos[0]) + abs(b.y - pos[1]))
                     b_aux.receber_ocorrencia(pos)
 
@@ -230,8 +235,10 @@ class AgenteSocorrista: # Agente Baseado em Objetivos
         dx = 1 if tx > self.x else -1 if tx < self.x else 0
         dy = 1 if ty > self.y else -1 if ty < self.y else 0
 
-        self.x += dx
-        self.y += dy
+        if dx != 0 or dy != 0:
+            self.x += dx
+            self.y += dy
+            self.distancia_total += 1
 
         # se chegar ao destino
         if (self.x, self.y) == alvo:
@@ -243,7 +250,7 @@ class AgenteSocorrista: # Agente Baseado em Objetivos
                 if len(self.lista_resgates) > 0:
                     self.lista_resgates.pop(0)
             else:
-                print(f"🚑 {self.nome} resgatou vítima em {alvo}")
+                print(f" {self.nome} resgatou vítima em {alvo}")
                 if alvo in feridos:
                     feridos.remove(alvo)
                 self.tem_passageiro = True
@@ -284,8 +291,10 @@ class AgenteSocorristaOtimizador(AgenteSocorrista): #  SEQUENCIAL vs OTIMIZADOR 
         tx, ty = alvo
         dx = 1 if tx > self.x else -1 if tx < self.x else 0
         dy = 1 if ty > self.y else -1 if ty < self.y else 0
-        self.x += dx
-        self.y += dy
+        if dx != 0 or dy != 0:
+            self.x += dx
+            self.y += dy
+            self.distancia_total += 1
 
         if (self.x, self.y) == alvo:
             if self.tem_passageiro:
@@ -345,7 +354,7 @@ class AgenteReativo:
             self.alvo = None
             return
 
-        # Movimentação calculada (suporta diagonal)
+        # Movimentação calculada 
         tx, ty = alvo_atual
         dx = 1 if tx > self.x else -1 if tx < self.x else 0
         dy = 1 if ty > self.y else -1 if ty < self.y else 0
@@ -409,13 +418,13 @@ def feridos2():
             print(f" Ferido criado em {pos}")
             return
 
-# Função: pixel → grid
+# Função: pixel → grid para facilitar
 def pixel_to_grid(px, py):
     x = px // CELL_SIZE
     y = py // CELL_SIZE
     return x, y
 
-# (opcional) guardar cliques
+# guardar cliques
 clicked_cells = []
 
 def get_quadrant(x, y):
@@ -431,9 +440,9 @@ def get_quadrant(x, y):
 
 # timers para a geração de incendios e feridos (Acelerado para testar inteligência)
 fire_timer = 0
-fire_delay = 600 
+fire_delay = 800 
 ferido_timer = 0
-ferido_delay = 600
+ferido_delay = 800
 
 overlay = pygame.Surface((MAP_SIZE, MAP_SIZE))
 overlay.fill((0, 0, 0))
@@ -463,7 +472,7 @@ while True:
     for s in socorristas:
         s.atualizar(feridos)
 
-    # 🔥 incêndios
+    #  incêndios
     fire_timer += 1
     if fire_timer >= fire_delay:
         spawn_fire()
@@ -475,7 +484,7 @@ while True:
         feridos2()
         ferido_timer = 0
 
-    # 🧠 BDI decide e envia tarefas
+    #  BDI decide e envia tarefas
     agenteBDI.despachar(bombeiros, socorristas, focos, feridos)
 
     # ================= RENDER =================
@@ -488,7 +497,7 @@ while True:
             pygame.draw.rect(screen, (255, 255, 255),
                              (x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE), 1)
 
-    # 4. EVENTOS (🔥 incêndios)
+    # 4. EVENTOS ( incêndios)
     for (x, y) in focos:
         px = x * CELL_SIZE
         py = y * CELL_SIZE
@@ -500,13 +509,13 @@ while True:
         py = y * CELL_SIZE
         screen.blit(ferido_img, (px, py))
 
-    # 6. AGENTES (🚁 drones)
+    # 6. AGENTES ( drones)
     for agente in agentesSimples:
         px = agente.x * CELL_SIZE
         py = agente.y * CELL_SIZE
         screen.blit(drone_img, (px, py))
      
-    # 🚒 BOMBEIROS
+    #  BOMBEIROS
     for b in bombeiros:
         px = b.x * CELL_SIZE
         py = b.y * CELL_SIZE
@@ -518,7 +527,7 @@ while True:
     h_text = font.render("H", True, (0, 0, 0))
     screen.blit(h_text, (hx * CELL_SIZE + 5, hy * CELL_SIZE + 2))
 
-    # 🚑 SOCORRISTAS
+    #  SOCORRISTAS
     for s in socorristas:
         px = s.x * CELL_SIZE
         py = s.y * CELL_SIZE
